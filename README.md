@@ -176,7 +176,7 @@ sequenceDiagram
 개발 및 테스트 시 아래 정보를 활용하세요.
 
 | 서비스 | 주소 | 비고 |
-|:---|-:---:|:---|
+|:---|-:---|:---|
 | **웹 채팅 인터페이스** | [http://localhost:8081](http://localhost:8081) | Vue.js 앱 (Spring 내장) |
 | Pulsar Manager (UI) | [http://localhost:9527](http://localhost:9527) | admin / apachepulsar |
 | **Pulsar Admin API** | [http://localhost:8085](http://localhost:8085) | REST API 전용 (UI 없음) |
