@@ -1,0 +1,57 @@
+name: pulsar_chat
+description: Apache Pulsar 기반 실시간 채팅 Flutter 앱
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ── 네트워킹 ─────────────────────────────
+  dio: ^5.4.0                    # HTTP 클라이언트
+  web_socket_channel: ^2.4.0    # WebSocket
+  stomp_dart_client: ^3.0.1     # STOMP over WebSocket
+
+  # ── 상태 관리 ────────────────────────────
+  flutter_riverpod: ^2.5.1      # Riverpod 상태관리
+  riverpod_annotation: ^2.3.4
+
+  # ── 로컬 저장소 ──────────────────────────
+  hive: ^2.2.3                  # 경량 NoSQL (오프라인 캐시)
+  hive_flutter: ^1.1.0
+  shared_preferences: ^2.2.2
+
+  # ── 파일 처리 ────────────────────────────
+  file_picker: ^8.0.3           # 파일 선택
+  image_picker: ^1.0.7          # 이미지 선택
+  path_provider: ^2.1.2         # 파일 경로
+  cached_network_image: ^3.3.1  # 이미지 캐싱
+  open_filex: ^4.3.4            # 파일 열기
+
+  # ── UI ───────────────────────────────────
+  flutter_chat_ui: ^1.6.13      # 채팅 UI 컴포넌트
+  timeago: ^3.6.1               # 상대 시간 표시
+  uuid: ^4.3.3                  # UUID 생성
+  intl: ^0.19.0                 # 날짜/시간 포매팅
+  shimmer: ^3.0.0               # 스켈레톤 로딩
+
+  # ── 푸시 알림 ────────────────────────────
+  firebase_core: ^2.28.0
+  firebase_messaging: ^14.8.1
+  flutter_local_notifications: ^17.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  build_runner: ^2.4.9
+  riverpod_generator: ^2.3.11
+  hive_generator: ^2.0.1
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

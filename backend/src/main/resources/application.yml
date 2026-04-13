@@ -1,0 +1,90 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: pulsar-chat-backend
+
+  # ─────────────────────────────────────────
+  # Apache Pulsar 설정
+  # ─────────────────────────────────────────
+  pulsar:
+    client:
+      service-url: ${PULSAR_SERVICE_URL:pulsar://localhost:6650}
+      operation-timeout: 30s
+      connection-timeout: 10s
+    producer:
+      send-timeout: 10s
+    consumer:
+      subscription-initial-position: earliest
+    defaults:
+      type-mappings:
+        - message-type: com.pulsarchat.dto.ChatMessage
+          schema-info:
+            schema-type: JSON
+
+  # ─────────────────────────────────────────
+  # 정적 리소스 서빙 (Vue.js index.html)
+  # Spring Boot가 static/ 을 자동으로 서빙
+  # → http://localhost:8081/ 로 바로 접근 가능
+  # ─────────────────────────────────────────
+  web:
+    resources:
+      static-locations: classpath:/static/
+      cache:
+        period: 0  # 개발 중 캐시 비활성화
+
+  # ─────────────────────────────────────────
+  # Servlet 파일 업로드 크기 제한
+  # ─────────────────────────────────────────
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+# ─────────────────────────────────────────
+# MinIO 설정
+# ─────────────────────────────────────────
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin123}
+  bucket: ${MINIO_BUCKET:chat-files}
+
+# ─────────────────────────────────────────
+# Pulsar Topic 설정
+# ─────────────────────────────────────────
+pulsar:
+  topics:
+    test: persistent://public/default/test-topic
+    chat-general: persistent://public/chat/general
+    chat-room-prefix: persistent://public/chat/room-
+    file-uploads: persistent://public/files/uploads
+    dlq: persistent://public/default/test-topic-DLQ
+  subscription:
+    name: chat-subscription
+    retry-delay: 3000
+    max-retries: 3
+
+# ─────────────────────────────────────────
+# CORS 설정
+# 같은 오리진(8081)에서 프론트엔드를 서빙하므로
+# 실질적으로 CORS 불필요 — Flutter 앱 대응만 유지
+# ─────────────────────────────────────────
+app:
+  cors:
+    allowed-origins:
+      - "*"
+
+# ─────────────────────────────────────────
+# 로깅
+# ─────────────────────────────────────────
+logging:
+  level:
+    com.pulsarchat: DEBUG
+    org.apache.pulsar: INFO
+    org.springframework.pulsar: DEBUG
+  file:
+    name: logs/application.log
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

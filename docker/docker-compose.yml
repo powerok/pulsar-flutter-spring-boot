@@ -1,0 +1,187 @@
+services:
+  # ─────────────────────────────────────────
+  # Apache Pulsar (Standalone Mode)
+  # ─────────────────────────────────────────
+  pulsar:
+    image: apachepulsar/pulsar:3.2.0
+    container_name: pulsar-standalone
+    restart: unless-stopped
+    ports:
+      - "6650:6650" # Pulsar binary protocol
+      - "8085:8080" # Pulsar HTTP admin API
+      - "9528:9527" # Pulsar WebSocket proxy
+    environment:
+      PULSAR_MEM: "-Xms512m -Xmx1g -XX:MaxDirectMemorySize=1g"
+      PULSAR_PREFIX_topicLevelPoliciesEnabled: "false"
+      PULSAR_PREFIX_systemTopicEnabled: "false"
+    volumes:
+      - pulsar-data:/pulsar/data
+      - pulsar-conf:/pulsar/conf
+      - ./pulsar-init.sh:/pulsar-init.sh
+    command: >
+      bash -c "
+        bin/pulsar standalone &
+        sleep 20 &&
+        bash /pulsar-init.sh &&
+        wait
+      "
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/admin/v2/clusters" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ─────────────────────────────────────────
+  # Pulsar Manager (Web UI)
+  # ─────────────────────────────────────────
+
+  pulsar-manager:
+    image: apachepulsar/pulsar-manager:v0.3.0
+    container_name: pulsar-manager
+    restart: unless-stopped
+    depends_on:
+      pulsar:
+        condition: service_healthy
+    ports:
+      - "9527:9527"
+    environment:
+      SPRING_CONFIGURATION_FILE: /pulsar-manager/pulsar-manager/application.properties
+      USER_MANAGEMENT_ENABLE: "true"
+      CASDOOR_ENDPOINT: ""
+      CASDOOR_CLIENTID: ""
+      ZUUL_ROUTES_ADMIN_URL: "http://pulsar:8080/admin/"
+      ZUUL_ROUTES_LOOKUP_URL: "http://pulsar:8080/lookup/"
+      DEFAULT_ENVIRONMENT_NAME: "local-cluster"
+      DEFAULT_ENVIRONMENT_SERVICE_URL: "http://pulsar:8080"
+      DEFAULT_ENVIRONMENT_BOOKIE_URL: "http://pulsar:8050"
+    volumes:
+      - pulsar-manager-data:/data
+      - ./pulsar-manager.properties:/pulsar-manager/pulsar-manager/application.properties
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7750/pulsar-manager/csrf-token"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pulsar-manager-init:
+    image: curlimages/curl:latest
+    container_name: pulsar-manager-init
+    depends_on:
+      pulsar-manager:
+        condition: service_healthy
+    entrypoint: |
+      /bin/sh -c "
+        echo 'Starting Pulsar Manager verification loop...'
+        MAX_RETRIES=10
+        COUNT=0
+        SUCCESS=false
+
+        while [ $$COUNT -lt $$MAX_RETRIES ] && [ \"$$SUCCESS\" = \"false\" ]; do
+          COUNT=$$((COUNT + 1))
+          echo \"Attempt $$COUNT...\"
+          
+          # 1. CSRF 토큰 및 쿠키 획득 (반드시 -c 옵션으로 쿠키를 저장해야 함)
+          CSRF_JSON=\$$(curl -s -c /tmp/cookies.txt http://pulsar-manager:7750/pulsar-manager/csrf-token)
+          TOKEN=\$$(echo \$$CSRF_JSON | sed 's/.*\"token\":\"\([^\"]*\)\".*/\1/')
+          
+          echo \"Attempting superuser creation... (Token: \$$TOKEN)\"
+
+          # 2. 관리자 생성 시도 (PUT) - 저장된 쿠키(-b)를 반드시 함께 전송
+          RESPONSE=\$$(curl -s -b /tmp/cookies.txt -c /tmp/cookies.txt -X PUT -H \"Content-Type: application/json\" -H \"X-XSRF-TOKEN: \$$TOKEN\" http://pulsar-manager:7750/pulsar-manager/users/superuser -d '{\"name\":\"admin\",\"password\":\"apachepulsar\",\"description\":\"admin\",\"email\":\"admin@abc.com\"}')
+          
+          echo \"Server Response: \$$RESPONSE\"
+
+          if echo \"\$$RESPONSE\" | grep -q '\"success\":true' || echo \"\$$RESPONSE\" | grep -q 'User already exists' || echo \"\$$RESPONSE\" | grep -q 'Add super user success' || echo \"\$$RESPONSE\" | grep -q '200 OK'; then
+            echo 'Admin user successfully verified/created.'
+            SUCCESS=true
+          else
+            echo 'Creation not confirmed, trying POST fallback...'
+            curl -s -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST -H \"Content-Type: application/json\" -H \"X-XSRF-TOKEN: \$$TOKEN\" http://pulsar-manager:7750/pulsar-manager/users/superuser -d '{\"name\":\"admin\",\"password\":\"apachepulsar\",\"description\":\"admin\",\"email\":\"admin@abc.com\"}' > /dev/null
+            sleep 5
+          fi
+        done
+
+        if [ \"$$SUCCESS\" = \"true\" ]; then
+          echo '=== Pulsar Manager Initialization Finished Successfully ==='
+        else
+          echo '=== Pulsar Manager Initialization FAILED ==='
+          exit 1
+        fi
+      "      
+
+  # ─────────────────────────────────────────
+  # MinIO (S3-Compatible Object Storage)
+  # ─────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Console UI
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─────────────────────────────────────────
+  # MinIO Client (Bucket 초기화)
+  # ─────────────────────────────────────────
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 minioadmin minioadmin123 &&
+        mc mb --ignore-existing local/chat-files &&
+        mc anonymous set download local/chat-files &&
+        echo 'MinIO bucket initialized.'
+      "
+
+  # ─────────────────────────────────────────
+  # Spring Boot Backend
+  # ─────────────────────────────────────────
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: pulsar-chat-backend
+    restart: unless-stopped
+    depends_on:
+      pulsar:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      PULSAR_SERVICE_URL: pulsar://pulsar:6650
+      SPRING_PULSAR_ADMIN_SERVICE_URL: http://pulsar:8080
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_BUCKET: chat-files
+    volumes:
+      - ./logs:/app/logs
+
+volumes:
+  pulsar-data:
+  pulsar-conf:
+  pulsar-manager-data:
+  pulsar-manager-db-data:
+  minio-data:
+
+
+networks:
+  default:
+    name: pulsar-chat-network
