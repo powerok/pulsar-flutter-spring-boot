@@ -176,13 +176,12 @@ sequenceDiagram
 개발 및 테스트 시 아래 정보를 활용하세요.
 
 | 서비스 | 주소 | 비고 |
-|:---|-:---|:---|
+| :--- | :--- | :--- |
 | **웹 채팅 인터페이스** | [http://localhost:8081](http://localhost:8081) | Vue.js 앱 (Spring 내장) |
 | Pulsar Manager (UI) | [http://localhost:9527](http://localhost:9527) | admin / apachepulsar |
 | **Pulsar Admin API** | [http://localhost:8085](http://localhost:8085) | REST API 전용 (UI 없음) |
 | **MinIO Console** | [http://localhost:9001](http://localhost:9001) | minioadmin / minioadmin123 |
 | **Pulsar Binary URL** | `pulsar://localhost:6650` | 백엔드/클라이언트 연결용 |
----
 
 ## 빠른 시작
 
